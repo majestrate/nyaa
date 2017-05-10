@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/pprof"
 	"time"
 
 	"github.com/ewhal/nyaa/cache"
@@ -54,6 +55,8 @@ func RunServer(conf *config.Config) {
 	}
 }
 
+var cpuProfileFile = flag.String("cpu", "", "cpu profiler dump file")
+
 func main() {
 	conf := config.New()
 	processFlags := conf.BindFlags()
@@ -79,6 +82,23 @@ func main() {
 		db.ORM, err = db.GormInit(conf)
 		if err != nil {
 			log.Fatal(err.Error())
+		}
+		if len(*cpuProfileFile) > 0 {
+			fpath := *cpuProfileFile
+			var f *os.File
+			f, err = os.Create(fpath)
+			if err != nil {
+				log.Fatal(err.Error())
+			}
+			err = pprof.StartCPUProfile(f)
+			if err != nil {
+				log.Fatal(err.Error())
+			}
+			defer func() {
+				pprof.StopCPUProfile()
+				f.Sync()
+				f.Close()
+			}()
 		}
 		initI18N()
 		go signals.Handle()
