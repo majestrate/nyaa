@@ -86,7 +86,7 @@ func (f *UploadForm) ExtractInfo(r *http.Request) error {
 
 	if !captcha.Authenticate(f.Captcha) {
 		// TODO: Prettier passing of mistyped Captcha errors
-		return errors.New(captcha.ErrInvalidCaptcha.Error())
+		return captcha.ErrInvalidCaptcha
 	}
 
 	// trim whitespace

@@ -2,6 +2,7 @@ package userService
 
 import (
 	"errors"
+	"github.com/ewhal/nyaa/common"
 	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
 	formStruct "github.com/ewhal/nyaa/service/user/form"
@@ -68,36 +69,44 @@ func ClearCookie(w http.ResponseWriter) (int, error) {
 func SetCookieHandler(w http.ResponseWriter, email string, pass string) (status int, err error) {
 	if email != "" && pass != "" {
 		var user model.User
-		var has bool
+
+		var users []model.User
 		isValidEmail, _ := formStruct.EmailValidation(email, formStruct.NewErrors())
 		if isValidEmail {
-			var users []model.User
-			users, err = db.Impl.GetUsersByEmail(email)
+			users, err = db.Impl.GetUsersWhere(&common.UserParam{
+				Email: email,
+			})
 			if err == nil && len(users) == 0 {
 				status = http.StatusNotFound
-				err = errors.New("User not found")
+				err = common.ErrNoSuchUser
 				return
 			} else if err != nil {
 				status = http.StatusInternalServerError
 				return
+			} else {
+				user = users[0]
 			}
 		} else {
-			user, has, err = db.Impl.GetUserByName(email)
-			if err == nil && !has {
+			users, err = db.Impl.GetUsersWhere(&common.UserParam{
+				Name: email,
+			})
+			if err == nil && len(users) == 0 {
 				status = http.StatusNotFound
-				err = errors.New("User not found")
+				err = common.ErrNoSuchUser
 				return
 			} else if err != nil {
 				status = http.StatusInternalServerError
 				return
+			} else {
+				user = users[0]
 			}
 		}
 		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pass))
 		if err != nil {
-			return http.StatusUnauthorized, errors.New("Password incorrect")
+			return http.StatusUnauthorized, common.ErrBadLogin
 		}
 		if user.Status == -1 {
-			return http.StatusUnauthorized, errors.New("Account banned")
+			return http.StatusUnauthorized, common.ErrUserBanned
 		}
 		status, err = SetCookie(w, user.Token)
 		if err != nil {
@@ -105,8 +114,9 @@ func SetCookieHandler(w http.ResponseWriter, email string, pass string) (status 
 		}
 		w.Header().Set("X-Auth-Token", user.Token)
 		status = http.StatusOK
+		return
 	}
-	return http.StatusNotFound, errors.New("user not found")
+	return http.StatusNotFound, common.ErrNoSuchUser
 }
 
 // RegisterHanderFromForm sets cookie from a RegistrationForm.
@@ -124,10 +134,9 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) (int, error) {
 }
 
 // CurrentUser get a current user.
-func CurrentUser(r *http.Request) (model.User, error) {
-	var user model.User
+func CurrentUser(r *http.Request) (user model.User, err error) {
+	var users []model.User
 	var token string
-	var err error
 	token = r.Header.Get("X-Auth-Token")
 	if len(token) > 0 {
 		log.Debug("header token exists")
@@ -138,12 +147,13 @@ func CurrentUser(r *http.Request) (model.User, error) {
 			return user, err
 		}
 	}
-	var has bool
-	user, has, err = db.Impl.GetUserByApiToken(token)
-	if has {
-		return user, nil
+	users, err = db.Impl.GetUsersWhere(&common.UserParam{
+		ApiToken: token,
+	})
+	if len(users) > 0 {
+		user = users[0]
 	} else if err == nil {
-		err = errors.New("no such user")
+		err = common.ErrNoSuchUser
 	}
-	return user, err
+	return
 }

@@ -1,12 +1,12 @@
 package userService
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/ewhal/nyaa/common"
 	"github.com/ewhal/nyaa/config"
 	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
@@ -54,16 +54,23 @@ func EmailVerification(token string, w http.ResponseWriter) (int, error) {
 	err := verificationHandler.Decode("", token, &value)
 	if err != nil {
 		fmt.Printf("%+v\n", err)
-		return http.StatusForbidden, errors.New("Token is not valid.")
+		return http.StatusForbidden, common.ErrInvalidToken
 	}
 	time_int, _ := strconv.ParseInt(value["t"], 10, 0)
 	if timeHelper.IsExpired(time.Unix(time_int, 0)) {
-		return http.StatusForbidden, errors.New("Token has expired.")
+		return http.StatusForbidden, common.ErrExpiredToken
 	}
-	var user model.User
-	if db.ORM.Where("user_id = ?", value["u"]).First(&user).RecordNotFound() {
-		return http.StatusNotFound, errors.New("User is not found.")
+	var users []model.User
+	users, err = db.Impl.GetUsersWhere(&common.UserParam{
+		ApiToken: token,
+	})
+	if err != nil {
+		return http.StatusInternalServerError, err
 	}
+	if len(users) == 0 {
+		return http.StatusInternalServerError, common.ErrInvalidToken
+	}
+	user := users[0]
 	user.Email = value["e"]
 	return UpdateUserCore(&user)
 }

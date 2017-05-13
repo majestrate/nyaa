@@ -57,3 +57,8 @@ func (db *Database) DeleteTorrentReportByID(id uint32) (err error) {
 	}
 	return
 }
+
+func (db *Database) DeleteTorrentReportsWhere(param *common.ReportParam) (deleted uint32, err error) {
+
+	return
+}

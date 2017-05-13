@@ -72,3 +72,17 @@ func (db *Database) queryRowWithPrepared(name string, visit func(*sql.Row) error
 	err = visit(db.getPrepared(name).QueryRow(params))
 	return
 }
+
+// execute a query by name and return how many rows were affected
+func (db *Database) execQuery(name string, p ...interface{}) (affected uint32, err error) {
+	var result sql.Result
+	result, err = db.getPrepared(name).Exec(p)
+	if err == nil {
+		var d int64
+		d, err = result.RowsAffected()
+		if err == nil {
+			affected = uint32(d)
+		}
+	}
+	return
+}

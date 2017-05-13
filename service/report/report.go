@@ -8,7 +8,9 @@ import (
 )
 
 func DeleteTorrentReport(id uint32) (err error, status int) {
-	err = db.Impl.DeleteTorrentReportByID(id)
+	_, err = db.Impl.DeleteTorrentReportsWhere(&common.ReportParam{
+		ID: id,
+	})
 	if err == nil {
 		status = http.StatusOK
 	} else {

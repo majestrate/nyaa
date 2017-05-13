@@ -4,15 +4,15 @@ import (
 	"github.com/ewhal/nyaa/config"
 	"github.com/ewhal/nyaa/util"
 
+	"encoding/json"
 	"fmt"
 	"html/template"
-	"strconv"
 	"strings"
 	"time"
 )
 
 type Feed struct {
-	ID        int
+	ID        uint32
 	Name      string
 	Hash      string
 	Magnet    string
@@ -20,30 +20,28 @@ type Feed struct {
 }
 
 type Torrent struct {
-	ID          uint
+	ID          uint32
 	Name        string
 	Hash        string
 	Category    int
 	SubCategory int
 	Status      int
 	Date        time.Time
-	UploaderID  uint
-	Downloads   int
+	UploaderID  uint32
+	Downloads   uint64
 	Stardom     int
-	Filesize    int64
+	Filesize    uint64
 	Description string
 	WebsiteLink string
 	DeletedAt   *time.Time
-
-	Uploader    *User
-	OldUploader string
-	OldComments []OldComment
-	Comments    []Comment
 
 	Seeders    uint32
 	Leechers   uint32
 	Completed  uint32
 	LastScrape time.Time
+
+	Comments []Comment
+	Uploader *User
 }
 
 // Returns the total size of memory recursively allocated for this struct
@@ -58,115 +56,50 @@ func (t Torrent) Size() (s int) {
 		2*2 // array pointers
 	s *= 8 // Assume 64 bit OS
 
-	if t.Uploader != nil {
-		s += t.Uploader.Size()
-	}
-	for _, c := range t.OldComments {
-		s += c.Size()
-	}
-	for _, c := range t.Comments {
-		s += c.Size()
-	}
-
 	return
 
+}
+
+func (t *Torrent) MarshalJSON() ([]byte, error) {
+	torrentLink := ""
+	if t.ID <= config.LastOldTorrentID && len(config.TorrentCacheLink) > 0 {
+		torrentLink = fmt.Sprintf(config.TorrentCacheLink, t.Hash)
+	} else if t.ID > config.LastOldTorrentID && len(config.TorrentStorageLink) > 0 {
+		torrentLink = fmt.Sprintf(config.TorrentStorageLink, t.Hash)
+	}
+	pubForm := map[string]interface{}{
+		"id":            t.ID,
+		"name":          t.Name,
+		"status":        t.Status,
+		"hash":          t.Hash,
+		"date":          t.Date,
+		"filesize":      t.Filesize,
+		"description":   util.SafeText(t.Description),
+		"comments":      t.Comments,
+		"category":      t.Category,
+		"sub_category":  t.SubCategory,
+		"downloads":     t.Downloads,
+		"uploader_id":   t.UploaderID,
+		"uploader_name": util.SafeText(t.Uploader.Username),
+		"website_link":  util.Safe(t.WebsiteLink),
+		"magnet":        template.URL(util.InfoHashToMagnet(strings.TrimSpace(t.Hash), t.Name, config.Trackers...)),
+		"torrent":       util.Safe(torrentLink),
+		"seeders":       t.Seeders,
+		"leechers":      t.Leechers,
+		"completed":     t.Completed,
+		"last_scrape":   t.LastScrape,
+	}
+	return json.Marshal(pubForm)
 }
 
 /* We need a JSON object instead of a Gorm structure because magnet URLs are
    not in the database and have to be generated dynamically */
 
 type ApiResultJSON struct {
-	Torrents         []TorrentJSON `json:"torrents"`
-	QueryRecordCount int           `json:"queryRecordCount"`
-	TotalRecordCount int           `json:"totalRecordCount"`
+	Torrents         []Torrent `json:"torrents"`
+	QueryRecordCount int       `json:"queryRecordCount"`
+	TotalRecordCount int       `json:"totalRecordCount"`
 }
 
-type CommentJSON struct {
-	Username string        `json:"username"`
-	UserID   int           `json:"user_id"`
-	Content  template.HTML `json:"content"`
-	Date     time.Time     `json:"date"`
-}
-
-type TorrentJSON struct {
-	ID           string        `json:"id"`
-	Name         string        `json:"name"`
-	Status       int           `json:"status"`
-	Hash         string        `json:"hash"`
-	Date         string        `json:"date"`
-	Filesize     string        `json:"filesize"`
-	Description  template.HTML `json:"description"`
-	Comments     []CommentJSON `json:"comments"`
-	SubCategory  string        `json:"sub_category"`
-	Category     string        `json:"category"`
-	Downloads    int           `json:"downloads"`
-	UploaderID   uint          `json:"uploader_id"`
-	UploaderName template.HTML `json:"uploader_name"`
-	OldUploader  template.HTML `json:"uploader_old"`
-	WebsiteLink  template.URL  `json:"website_link"`
-	Magnet       template.URL  `json:"magnet"`
-	TorrentLink  template.URL  `json:"torrent"`
-	Seeders      uint32        `json:"seeders"`
-	Leechers     uint32        `json:"leechers"`
-	Completed    uint32        `json:"completed"`
-	LastScrape   time.Time     `json:"last_scrape"`
-}
-
-// ToJSON converts a model.Torrent to its equivalent JSON structure
-func (t *Torrent) ToJSON() *TorrentJSON {
-	magnet := util.InfoHashToMagnet(strings.TrimSpace(t.Hash), t.Name, config.Trackers...)
-	commentsJSON := make([]CommentJSON, 0, len(t.OldComments)+len(t.Comments))
-	for _, c := range t.OldComments {
-		commentsJSON = append(commentsJSON, CommentJSON{Username: c.Username, UserID: -1, Content: template.HTML(c.Content), Date: c.Date.UTC()})
-	}
-	for _, c := range t.Comments {
-		commentsJSON = append(commentsJSON, CommentJSON{Username: c.User.Username, UserID: int(c.User.ID), Content: util.MarkdownToHTML(c.Content), Date: c.CreatedAt.UTC()})
-	}
-	uploader := ""
-	if t.Uploader != nil {
-		uploader = t.Uploader.Username
-	}
-	torrentlink := ""
-	if t.ID <= config.LastOldTorrentID && len(config.TorrentCacheLink) > 0 {
-		torrentlink = fmt.Sprintf(config.TorrentCacheLink, t.Hash)
-	} else if t.ID > config.LastOldTorrentID && len(config.TorrentStorageLink) > 0 {
-		// TODO: Fix as part of configuration changes (fix what?)
-		torrentlink = fmt.Sprintf(config.TorrentStorageLink, t.Hash)
-	}
-	res := &TorrentJSON{
-		ID:           strconv.FormatUint(uint64(t.ID), 10),
-		Name:         t.Name,
-		Status:       t.Status,
-		Hash:         t.Hash,
-		Date:         t.Date.Format(time.RFC3339),
-		Filesize:     util.FormatFilesize2(t.Filesize),
-		Description:  util.MarkdownToHTML(t.Description),
-		Comments:     commentsJSON,
-		SubCategory:  strconv.Itoa(t.SubCategory),
-		Category:     strconv.Itoa(t.Category),
-		Downloads:    t.Downloads,
-		UploaderID:   t.UploaderID,
-		UploaderName: util.SafeText(uploader),
-		OldUploader:  util.SafeText(t.OldUploader),
-		WebsiteLink:  util.Safe(t.WebsiteLink),
-		Magnet:       template.URL(magnet),
-		TorrentLink:  util.Safe(torrentlink),
-		Leechers:     t.Leechers,
-		Seeders:      t.Seeders,
-		Completed:    t.Completed,
-		LastScrape:   t.LastScrape,
-	}
-
-	return res
-}
-
-/* Complete the functions when necessary... */
-
-// Map Torrents to TorrentsToJSON without reallocations
-func TorrentsToJSON(t []*Torrent) []*TorrentJSON { // TODO: Convert to singular version
-	json := make([]*TorrentJSON, len(t))
-	for i := range t {
-		json[i] = t[i].ToJSON()
-	}
-	return json
-}
+// TorrentObtainer is a function that obtains torrents somehow
+type TorrentObtainer func() ([]Torrent, error)

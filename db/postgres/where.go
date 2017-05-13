@@ -10,7 +10,7 @@ import (
 )
 
 // build sql query from SearchParam for torrent search
-func searchParamToTorrentQuery(param *common.SearchParam) (q sqlQuery) {
+func searchParamToTorrentQuery(param *common.TorrentParam) (q sqlQuery) {
 	counter := 1
 	q.query = fmt.Sprintf("SELECT %s FROM %s ", torrentSelectColumnsFull, tableTorrents)
 	if param.Category.IsSet() {
@@ -128,7 +128,22 @@ func searchParamToTorrentQuery(param *common.SearchParam) (q sqlQuery) {
 	return
 }
 
-func (db *Database) GetTorrentsWhere(param *common.SearchParam) (torrents []model.Torrent, err error) {
+func (db *Database) GetTorrentsWhere(param *common.TorrentParam) (torrents []model.Torrent, err error) {
+	if param.TorrentID > 0 {
+		var torrent model.Torrent
+		var has bool
+		torrent, has, err = db.GetTorrentByID(param.TorrentID)
+		if has {
+			torrents = append(torrents, torrent)
+		}
+		return
+	}
+
+	if param.All {
+		torrents, err = db.GetAllTorrents(param.Offset, param.Max)
+		return
+	}
+
 	q := searchParamToTorrentQuery(param)
 	err = q.Query(db.conn, func(rows *sql.Rows) error {
 		if param.Max == 0 {

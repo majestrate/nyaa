@@ -23,12 +23,9 @@ type Database interface {
 	// migrate to next database revision
 	MigrateNext() error
 
-	// get all torrents with limit and offset
-	GetAllTorrents(offset, limit uint32) ([]model.Torrent, error)
-	// get all torrents with where params
-	GetTorrentsWhere(param *common.SearchParam) ([]model.Torrent, error)
-	// get torrent by id
-	GetTorrentByID(id uint32) (model.Torrent, bool, error)
+	// get torrents given parameters
+	GetTorrentsWhere(param *common.TorrentParam) ([]model.Torrent, error)
+
 	// insert new comment
 	InsertComment(comment *model.Comment) error
 	// new torrent report
@@ -37,24 +34,14 @@ type Database interface {
 	// check if user A follows B (by id)
 	UserFollows(a, b uint32) (bool, error)
 
-	DeleteTorrentReportByID(id uint32) error
+	// delete reports given params
+	DeleteTorrentReportsWhere(param *common.ReportParam) (uint32, error)
 
+	// get reports given params
 	GetTorrentReportsWhere(param *common.ReportParam) ([]model.TorrentReport, error)
 
 	// bulk record scrape events in 1 transaction
 	RecordScrapes(scrapes []common.ScrapeResult) error
-
-	// get user model by api token
-	GetUserByApiToken(token string) (model.User, bool, error)
-
-	// get users by email
-	GetUsersByEmail(email string) ([]model.User, error)
-
-	// get user by username
-	GetUserByName(name string) (model.User, bool, error)
-
-	// get user by ID
-	GetUserByID(id uint32) (model.User, bool, error)
 
 	// insert new user
 	InsertUser(u *model.User) error
@@ -62,8 +49,29 @@ type Database interface {
 	// update existing user info
 	UpdateUser(u *model.User) error
 
-	// delete a user by ID
-	DeleteUserByID(id uint32) error
+	// get users given paramteters
+	GetUsersWhere(param *common.UserParam) ([]model.User, error)
+
+	// delete many users given parameters
+	DeleteUsersWhere(param *common.UserParam) (uint32, error)
+
+	// get comments by given parameters
+	GetCommentsWhere(param *common.CommentParam) ([]model.Comment, error)
+
+	// delete comment by given parameters
+	DeleteCommentsWhere(param *common.CommentParam) (uint32, error)
+
+	// add user A following B
+	AddUserFollowing(a, b uint32) error
+
+	// delete user A following B
+	DeleteUserFollowing(a, b uint32) (bool, error)
+
+	// delete torrents by given parameters
+	DeleteTorrentsWhere(param *common.TorrentParam) (uint32, error)
+
+	// insert/update torrent
+	UpsertTorrent(t *model.Torrent) error
 
 	// DO NOT USE ME kthnx
 	Query(query string, params ...interface{}) (*sql.Rows, error)

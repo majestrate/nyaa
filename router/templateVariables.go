@@ -35,7 +35,7 @@ type NotFoundTemplateVariables struct {
 }
 
 type ViewTemplateVariables struct {
-	Torrent    model.TorrentJSON
+	Torrent    model.Torrent
 	Captcha    captcha.Captcha
 	Search     SearchForm
 	Navigation Navigation
@@ -97,7 +97,7 @@ type UserProfileVariables struct {
 }
 
 type HomeTemplateVariables struct {
-	ListTorrents []model.TorrentJSON
+	ListTorrents []model.Torrent
 	Search       SearchForm
 	Navigation   Navigation
 	User         *model.User
@@ -149,15 +149,15 @@ type PanelCommentListVbs struct {
 }
 type PanelTorrentEdVbs struct {
 	Upload     UploadForm
-	Search  SearchForm
-	User    *model.User
-	FormErrors  map[string][]string
-	FormInfos   map[string][]string
+	Search     SearchForm
+	User       *model.User
+	FormErrors map[string][]string
+	FormInfos  map[string][]string
 	URL        *url.URL // For parsing Url in templates
 }
 
 type PanelTorrentReportListVbs struct {
-	TorrentReports []model.TorrentReportJson
+	TorrentReports []model.TorrentReport
 	Search         SearchForm
 	Navigation     Navigation
 	User           *model.User
@@ -168,15 +168,13 @@ type PanelTorrentReportListVbs struct {
  * Variables used by the upper ones
  */
 type Navigation struct {
-	TotalItem      int
-	MaxItemPerPage int
-	CurrentPage    int
+	MaxItemPerPage uint32
+	CurrentPage    uint32
 	Route          string
 }
 
 type SearchForm struct {
-	common.SearchParam
-	Category           string
+	Torrent            common.TorrentParam
 	HideAdvancedSearch bool
 }
 

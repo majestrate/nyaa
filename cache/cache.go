@@ -11,9 +11,10 @@ import (
 	"errors"
 )
 
-// Cache defines interface for caching search results
+// Cache defines interface for caching models
 type Cache interface {
-	Get(key common.SearchParam, r func() ([]*model.Torrent, int, error)) ([]*model.Torrent, int, error)
+	GetTorrents(key *common.TorrentParam, get model.TorrentObtainer) ([]model.Torrent, error)
+	ClearTorrents()
 	ClearAll()
 }
 

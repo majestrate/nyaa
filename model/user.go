@@ -15,27 +15,36 @@ type User struct {
 	Token           string
 	TokenExpiration time.Time
 	Language        string
-
-	// TODO: move this to PublicUser
-	LikingCount int    `json:"likingCount"`
-	LikedCount  int    `json:"likedCount"`
-	Likings     []User // Don't work `gorm:"foreignkey:user_id;associationforeignkey:follower_id;many2many:user_follows"`
-	Liked       []User // Don't work `gorm:"foreignkey:follower_id;associationforeignkey:user_id;many2many:user_follows"`
-
-	MD5      string `json:"md5"` // Hash of email address, used for Gravatar
-	Torrents []Torrent
-
-	LastLoginAt time.Time
-	LastLoginIP string
+	MD5             string
+	LastLoginAt     time.Time
+	LastLoginIP     string
+	Uploads         []Torrent
+	UsersWeLiked    []uint32
+	UsersLikingMe   []uint32
 }
 
-type UserJSON struct {
-	ID          uint32 `json:"user_id"`
-	Username    string `json:"username"`
-	Status      int    `json:"status"`
-	CreatedAt   string `json:"created_at"`
-	LikingCount int    `json:"liking_count"`
-	LikedCount  int    `json:"liked_count"`
+type PublicUser struct {
+	ID          uint32    `json:"user_id"`
+	Username    string    `json:"username"`
+	Status      int       `json:"status"`
+	CreatedAt   string    `json:"created_at"`
+	LikingCount int       `json:"liking_count"`
+	LikedCount  int       `json:"liked_count"`
+	MD5         string    `json:"md5"`
+	Uploads     []Torrent `json:"uploads"`
+}
+
+func (u *User) ToPublic() PublicUser {
+	return PublicUser{
+		ID:          u.ID,
+		Username:    u.Username,
+		Status:      u.Status,
+		CreatedAt:   u.CreatedAt.Format(time.RFC3339),
+		LikingCount: len(u.UsersWeLiked),
+		LikedCount:  len(u.UsersLikingMe),
+		MD5:         u.MD5,
+		Uploads:     u.Uploads,
+	}
 }
 
 // Returns the total size of memory recursively allocated for this struct
@@ -53,10 +62,6 @@ func (u User) Size() (s int) {
 	return
 }
 
-type PublicUser struct {
-	User *User
-}
-
 // different users following eachother
 type UserFollows struct {
 	UserID     uint32
@@ -66,16 +71,4 @@ type UserFollows struct {
 type UserUploadsOld struct {
 	Username  string
 	TorrentId uint
-}
-
-func (u *User) ToJSON() *UserJSON {
-	json := &UserJSON{
-		ID:          u.ID,
-		Username:    u.Username,
-		Status:      u.Status,
-		CreatedAt:   u.CreatedAt.Format(time.RFC3339),
-		LikingCount: u.LikingCount,
-		LikedCount:  u.LikedCount,
-	}
-	return json
 }

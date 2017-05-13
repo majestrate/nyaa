@@ -1,7 +1,6 @@
 package router
 
 import (
-	"html"
 	"net/http"
 	"strconv"
 
@@ -21,43 +20,50 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// db params url
 	var err error
-	maxPerPage := 50
+	maxPerPage := uint32(50)
 	maxString := r.URL.Query().Get("max")
 	if maxString != "" {
-		maxPerPage, err = strconv.Atoi(maxString)
+		var p uint64
+		p, err = strconv.ParseUint(maxString, 10, 32)
 		if !log.CheckError(err) {
-			maxPerPage = 50 // default Value maxPerPage
+			maxPerPage = uint32(50) // default Value maxPerPage
+		} else {
+			maxPerPage = uint32(p)
 		}
 	}
 
-	pagenum := 1
+	pagenum := uint32(0)
 	if page != "" {
-		pagenum, err = strconv.Atoi(html.EscapeString(page))
+		var p uint64
+		p, err = strconv.ParseUint(page, 10, 32)
 		if !log.CheckError(err) {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			util.SendError(w, err, http.StatusInternalServerError)
 			return
 		}
+		pagenum = uint32(p)
 	}
 
-	search := common.SearchParam{
-		Max:  uint(maxPerPage),
-		Page: pagenum,
+	if pagenum == 0 {
+		pagenum = 1
 	}
 
-	torrents, nbTorrents, err := cache.Impl.Get(search, func() ([]*model.Torrent, int, error) {
-		torrents, nbTorrents, err := db.Impl.GetAllTorrents(maxPerPage, maxPerPage*(pagenum-1))
-		if !log.CheckError(err) {
-			util.SendError(w, err, 400)
-		}
-		return torrents, nbTorrents, err
+	search := common.TorrentParam{
+		Max:    uint32(maxPerPage),
+		Offset: uint32(pagenum-1) * uint32(maxPerPage),
+	}
+
+	torrents, err := cache.Impl.GetTorrents(&search, func() ([]model.Torrent, error) {
+		return db.Impl.GetTorrentsWhere(&search)
 	})
+	if err != nil {
+		util.SendError(w, err, http.StatusInternalServerError)
+		return
+	}
 
-	b := model.TorrentsToJSON(torrents)
-
-	navigationTorrents := Navigation{nbTorrents, maxPerPage, pagenum, "search_page"}
+	navigationTorrents := Navigation{maxPerPage, pagenum, "search_page"}
 
 	languages.SetTranslationFromRequest(homeTemplate, r, "en-us")
-	htv := HomeTemplateVariables{b, NewSearchForm(), navigationTorrents, GetUser(r), r.URL, mux.CurrentRoute(r)}
+	htv := HomeTemplateVariables{torrents, NewSearchForm(), navigationTorrents, GetUser(r), r.URL, mux.CurrentRoute(r)}
 
 	err = homeTemplate.ExecuteTemplate(w, "index.html", htv)
 	if err != nil {

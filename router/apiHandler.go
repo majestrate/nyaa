@@ -3,11 +3,11 @@ package router
 import (
 	"encoding/json"
 	"fmt"
-	"html"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/ewhal/nyaa/common"
 	"github.com/ewhal/nyaa/config"
 	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
@@ -20,7 +20,7 @@ import (
 func ApiHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	page := vars["page"]
-	whereParams := db.WhereParams{}
+	whereParams := common.TorrentParam{}
 	req := apiService.TorrentsRequest{}
 
 	contentType := r.Header.Get("Content-Type")
@@ -42,33 +42,41 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		maxString := r.URL.Query().Get("max")
 		if maxString != "" {
-			req.MaxPerPage, err = strconv.Atoi(maxString)
+			var i uint64
+			i, err = strconv.ParseUint(maxString, 10, 32)
 			if !log.CheckError(err) {
 				req.MaxPerPage = 50 // default Value maxPerPage
+			} else {
+				req.MaxPerPage = uint32(i)
 			}
 		}
 
 		req.Page = 1
 		if page != "" {
-			req.Page, err = strconv.Atoi(html.EscapeString(page))
+			var i uint64
+			i, err = strconv.ParseUint(page, 10, 32)
 			if !log.CheckError(err) {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			req.Page = uint32(i)
+
 		}
 	}
 
-	torrents, nbTorrents, err := db.Impl.GetTorrentsWhere(&whereParams, req.MaxPerPage, req.MaxPerPage*(req.Page-1))
+	whereParams.Max, whereParams.Offset = req.MaxPerPage, req.MaxPerPage*(req.Page-1)
+
+	whereParams.Full = true
+
+	torrents, err := db.Impl.GetTorrentsWhere(&whereParams)
 	if err != nil {
 		util.SendError(w, err, 400)
 		return
 	}
 
 	b := model.ApiResultJSON{
-		Torrents: model.TorrentsToJSON(torrents),
+		Torrents: torrents,
 	}
-	b.QueryRecordCount = req.MaxPerPage
-	b.TotalRecordCount = nbTorrents
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(b)
 	if err != nil {
@@ -79,123 +87,142 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 
 func ApiViewHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	id := vars["id"]
-
-	torrent, err := torrentService.GetTorrentById(id)
-	b := torrent.ToJSON()
+	id, err := strconv.ParseUint(vars["id"], 10, 32)
+	var result interface{}
 	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(b)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	if err == nil {
+		torrents, err := db.Impl.GetTorrentsWhere(&common.TorrentParam{
+			TorrentID: uint32(id),
+		})
+		if err == nil {
+			if len(torrents) > 0 {
+				result = torrents[0]
+			} else {
+				w.WriteHeader(http.StatusNotFound)
+			}
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			result = map[string]interface{}{"error": err.Error()}
+		}
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+		result = map[string]interface{}{"error": err.Error()}
 	}
+	json.NewEncoder(w).Encode(result)
 }
 
-func ApiUploadHandler(w http.ResponseWriter, r *http.Request) {
+func apiUpsertTorrentHandler(w http.ResponseWriter, r *http.Request, fresh bool) {
+	var result interface{}
+	var status int
 	if config.UploadsDisabled {
-		http.Error(w, "Error uploads are disabled", http.StatusInternalServerError)
-		return
+		status = http.StatusForbidden
+		result = map[string]interface{}{"error": "uploads disabled"}
+
+	} else {
+
+		contentType := r.Header.Get("Content-Type")
+		if contentType == "application/json" {
+			token := r.Header.Get("Authorization")
+			users, err := db.Impl.GetUsersWhere(&common.UserParam{
+				ApiToken: token,
+			})
+			if err == nil {
+				if len(users) == 0 {
+					result = map[string]interface{}{"error": apiService.ErrApiKey.Error()}
+					status = http.StatusForbidden
+				} else {
+					user := users[0]
+					if user.ID == 0 {
+						result = map[string]interface{}{"error": apiService.ErrApiKey.Error()}
+						status = http.StatusForbidden
+					} else {
+
+						defer r.Body.Close()
+
+						if err == nil {
+							var torrent model.Torrent
+							dec := json.NewDecoder(r.Body)
+							upload := apiService.TorrentRequest{}
+							update := apiService.UpdateRequest{}
+							if fresh {
+								err = dec.Decode(&upload)
+								if err == nil {
+									err, status = upload.ValidateUpload()
+									if err == nil {
+										torrent = model.Torrent{
+											Name:        upload.Name,
+											Category:    upload.Category,
+											SubCategory: upload.SubCategory,
+											Status:      1,
+											Hash:        upload.Hash,
+											Date:        time.Now(),
+											Filesize:    0, //?
+											Description: upload.Description,
+											UploaderID:  user.ID,
+											Uploader:    &user,
+										}
+									}
+								} else {
+									status = http.StatusBadRequest
+								}
+							} else {
+								err = dec.Decode(&update)
+								if err == nil {
+									torrent.Name = update.Update.Name
+									torrent.Category = update.Update.Category
+									torrent.SubCategory = update.Update.SubCategory
+									torrent.Description = update.Update.Description
+									torrent.ID = update.ID
+								} else {
+									status = http.StatusBadRequest
+								}
+							}
+							if err == nil {
+								err = db.Impl.UpsertTorrent(&torrent)
+								if err == nil {
+									status = http.StatusCreated
+									result = &torrent
+								} else {
+									status = http.StatusInternalServerError
+									result = map[string]interface{}{
+										"error": err.Error(),
+									}
+								}
+							} else {
+								result = map[string]interface{}{
+									"error": err.Error(),
+								}
+							}
+
+						} else {
+							status = http.StatusBadRequest
+							result = map[string]interface{}{
+								"error": err.Error(),
+							}
+						}
+					}
+				}
+			} else {
+				status = http.StatusInternalServerError
+				result = map[string]interface{}{
+					"error": err.Error(),
+				}
+			}
+		} else {
+			status = http.StatusUnsupportedMediaType
+			result = map[string]interface{}{
+				"error": fmt.Sprintf("bad content type: %s", contentType),
+			}
+		}
 	}
-
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "application/json" {
-		token := r.Header.Get("Authorization")
-		user := model.User{}
-		db.ORM.Where("api_token = ?", token).First(&user) //i don't like this
-		if user.ID == 0 {
-			http.Error(w, apiService.ErrApiKey.Error(), http.StatusForbidden)
-			return
-		}
-
-		defer r.Body.Close()
-
-		//verify token
-		//token := r.Header.Get("Authorization")
-
-		upload := apiService.TorrentRequest{}
-		d := json.NewDecoder(r.Body)
-		if err := d.Decode(&upload); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		err, code := upload.ValidateUpload()
-		if err != nil {
-			http.Error(w, err.Error(), code)
-			return
-		}
-
-		torrent := model.Torrent{
-			Name:        upload.Name,
-			Category:    upload.Category,
-			SubCategory: upload.SubCategory,
-			Status:      1,
-			Hash:        upload.Hash,
-			Date:        time.Now(),
-			Filesize:    0, //?
-			Description: upload.Description,
-			UploaderID:  user.ID,
-			Uploader:    &user,
-		}
-
-		db.ORM.Create(&torrent)
-		if err != nil {
-			util.SendError(w, err, 500)
-			return
-		}
-		fmt.Printf("%+v\n", torrent)
-	}
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(result)
 }
 
 func ApiUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	if config.UploadsDisabled {
-		http.Error(w, "Error uploads are disabled", http.StatusInternalServerError)
-		return
-	}
+	apiUpsertTorrentHandler(w, r, false)
+}
 
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "application/json" {
-		token := r.Header.Get("Authorization")
-		user := model.User{}
-		db.ORM.Where("api_token = ?", token).First(&user) //i don't like this
-		if user.ID == 0 {
-			http.Error(w, apiService.ErrApiKey.Error(), http.StatusForbidden)
-			return
-		}
-
-		defer r.Body.Close()
-
-		update := apiService.UpdateRequest{}
-		d := json.NewDecoder(r.Body)
-		if err := d.Decode(&update); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		id := update.ID
-		torrent := model.Torrent{}
-		db.ORM.Where("torrent_id = ?", id).First(&torrent)
-		if torrent.ID == 0 {
-			http.Error(w, apiService.ErrTorrentId.Error(), http.StatusBadRequest)
-			return
-		}
-		if torrent.UploaderID != 0 && torrent.UploaderID != user.ID { //&& user.Status != mod
-			http.Error(w, apiService.ErrRights.Error(), http.StatusForbidden)
-			return
-		}
-
-		err, code := update.Update.ValidateUpdate()
-		if err != nil {
-			http.Error(w, err.Error(), code)
-			return
-		}
-		update.UpdateTorrent(&torrent)
-
-		db.ORM.Save(&torrent)
-		if err != nil {
-			util.SendError(w, err, 500)
-			return
-		}
-		fmt.Printf("%+v\n", torrent)
-	}
+func ApiUploadHandler(w http.ResponseWriter, r *http.Request) {
+	apiUpsertTorrentHandler(w, r, true)
 }

@@ -21,6 +21,10 @@ const queryGetUserByName = "GetUserByName"
 const queryGetUserByID = "GetUserByID"
 const queryUpdateUser = "UpdateUser"
 const queryDeleteUserByID = "DeleteUserByID"
+const queryDeleteUserByEmail = "DeleteUserByEmail"
+const queryDeleteUserByToken = "DeleteUserByToken"
+const queryUserFollowsUpsert = "UserFollowsUpsert"
+const queryDeleteUserFollowing = "DeleteUserFollowing"
 
 const torrentSelectColumnsFull = `torrent_id, torrent_name, torrent_hash, category, sub_category, status, date, uploader, downloads, stardom, description, website_link, deleted_at, seeders, leechers, completed, last_scrape`
 
@@ -62,4 +66,8 @@ var statements = map[string]string{
 	queryInsertUser:              fmt.Sprintf("INSERT INTO %s (username, password, email, status, created_at, updated_at, last_login_at, last_login_ip, api_token, api_token_expires, language, md5 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)", tableUsers),
 	queryUpdateUser:              fmt.Sprintf("UPDATE %s SET (username = $2, password = $3 , email = $4, status = $5, updated_at = $6, last_login_at = $7 , last_login_ip = $8 , api_token = $9 , api_token_expiry = $10 , language = $11 , md5 = $12 ) WHERE user_id = $1", tableUsers),
 	queryDeleteUserByID:          fmt.Sprintf("DELETE FROM %s WHERE user_id = $1", tableUsers),
+	queryDeleteUserByEmail:       fmt.Sprintf("DELETE FROM %s WHERE email = $1", tableUsers),
+	queryDeleteUserByToken:       fmt.Sprintf("DELETE FROM %s WHERE api_token = $1", tableUsers),
+	queryUserFollowsUpsert:       fmt.Sprintf("INSERT INTO %s VALUES(user_id, following) ($1, $2) ON CONFLICT DO UPDATE", tableUserFollows),
+	queryDeleteUserFollowing:     fmt.Sprintf("DELETE FROM %s WHERE user_id = $1 AND following = $2", tableUserFollows),
 }

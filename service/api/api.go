@@ -6,22 +6,22 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ewhal/nyaa/db"
+	"github.com/ewhal/nyaa/common"
 	"github.com/ewhal/nyaa/model"
 )
 
 type torrentsQuery struct {
-	Category    int `json:"category"`
-	SubCategory int `json:"sub_category"`
-	Status      int `json:"status"`
-	Uploader    int `json:"uploader"`
-	Downloads   int `json:"downloads"`
+	Category    int    `json:"category"`
+	SubCategory int    `json:"sub_category"`
+	Status      int    `json:"status"`
+	Uploader    uint32 `json:"uploader"`
+	Downloads   uint32 `json:"downloads"`
 }
 
 type TorrentsRequest struct {
 	Query      torrentsQuery `json:"search"`
-	Page       int           `json:"page"`
-	MaxPerPage int           `json:"limit"`
+	Page       uint32        `json:"page"`
+	MaxPerPage uint32        `json:"limit"`
 }
 
 //accept torrent files?
@@ -35,11 +35,11 @@ type TorrentRequest struct {
 }
 
 type UpdateRequest struct {
-	ID     int            `json:"id"`
+	ID     uint32         `json:"id"`
 	Update TorrentRequest `json:"update"`
 }
 
-func (r *TorrentsRequest) ToParams() (res db.WhereParams) {
+func (r *TorrentsRequest) ToParams() (param common.TorrentParam) {
 
 	// TODO: write this
 

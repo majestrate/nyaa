@@ -3,7 +3,11 @@ package search
 import (
 	"net/http"
 	"strconv"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/ewhal/nyaa/cache"
 	"github.com/ewhal/nyaa/common"
 	"github.com/ewhal/nyaa/config"
 	"github.com/ewhal/nyaa/db"
@@ -15,17 +19,7 @@ func Configure(conf *config.SearchConfig) (err error) {
 	return
 }
 
-func SearchByQuery(r *http.Request, pagenum uint32) (search common.SearchParam, tor []model.Torrent, count int, err error) {
-	search, tor, count, err = searchByQuery(r, pagenum, true)
-	return
-}
-
-func SearchByQueryNoCount(r *http.Request, pagenum uint32) (search common.SearchParam, tor []model.Torrent, err error) {
-	search, tor, _, err = searchByQuery(r, pagenum, false)
-	return
-}
-
-func getRequestSearchParam(r *http.Request, pagenum uint32) (search common.SearchParam) {
+func getRequestTorrentParam(r *http.Request, pagenum uint32) (search common.TorrentParam) {
 
 	max, err := strconv.ParseUint(r.URL.Query().Get("max"), 10, 32)
 	if err != nil {
@@ -37,14 +31,58 @@ func getRequestSearchParam(r *http.Request, pagenum uint32) (search common.Searc
 	} else {
 		search.Max = uint32(max)
 	}
+	if pagenum == 0 {
+		pagenum = 1
+	}
+	search.Offset = (pagenum - 1) * search.Max
+
+	q := r.URL.Query().Get("q")
+	var words []string
+	split := strings.Fields(q)
+	for idx := range split {
+		firstRune, _ := utf8.DecodeRuneInString(split[idx])
+		if len(split[idx]) == 1 && (unicode.IsPunct(firstRune) || unicode.IsControl(firstRune)) {
+			continue
+		}
+		words = append(words, split[idx])
+	}
+
+	search.NameLike = strings.Join(split, ",")
+
+	var userid uint64
+	userid, _ = strconv.ParseUint(r.URL.Query().Get("userID"), 10, 32)
+	search.UserID = uint32(userid)
+
+	search.Category.Parse(r.URL.Query().Get("c"))
+	search.Status.Parse(r.URL.Query().Get("s"))
+	search.Sort.Parse(r.URL.Query().Get("sort"))
+
+	var notNulls []string
+	switch search.Sort {
+	case common.Seeders:
+		notNulls = append(notNulls, "seeders")
+		break
+	case common.Leechers:
+		notNulls = append(notNulls, "leechers")
+		break
+	case common.Completed:
+		notNulls = append(notNulls, "completed")
+		break
+	}
+
+	search.NotNull = strings.Join(notNulls, ",")
+
+	if r.URL.Query().Get("order") == "true" {
+		search.Order = true
+	}
 
 	return
 }
 
-func searchByQuery(r *http.Request, pagenum uint32, countAll bool) (
-	search common.SearchParam, torrents []model.Torrent, count int, err error,
-) {
-	search = getRequestSearchParam(r, pagenum)
-	torrents, err = db.Impl.GetTorrentsWhere(&search)
+func SearchByQuery(r *http.Request, pagenum uint32) (search common.TorrentParam, torrents []model.Torrent, err error) {
+	search = getRequestTorrentParam(r, pagenum)
+	torrents, err = cache.Impl.GetTorrents(&search, func() ([]model.Torrent, error) {
+		return db.Impl.GetTorrentsWhere(&search)
+	})
 	return
 }

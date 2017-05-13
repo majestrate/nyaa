@@ -6,11 +6,6 @@ import (
 	"database/sql"
 )
 
-func (db *Database) TotalTorrents() (count uint32, err error) {
-	// TODO: implement
-	return
-}
-
 func (db *Database) GetAllTorrents(offset, limit uint32) (torrents []model.Torrent, err error) {
 	err = db.queryWithPrepared(queryGetAllTorrents, func(rows *sql.Rows) error {
 		torrents = make([]model.Torrent, 0, limit)
@@ -30,5 +25,9 @@ func (db *Database) GetTorrentByID(id uint32) (torrent model.Torrent, has bool, 
 		has = true
 		return nil
 	}, id)
+	return
+}
+
+func (db *Database) UpsertTorrent(t *model.Torrent) (err error) {
 	return
 }

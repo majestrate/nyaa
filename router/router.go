@@ -67,7 +67,7 @@ func init() {
 	Router.Handle("/search/{page}", gzipSearchHandler).Name("search_page")
 	Router.Handle("/api", gzipAPIHandler).Methods("GET")
 	Router.Handle("/api/{page:[0-9]*}", wrapHandler(gzipAPIHandler)).Methods("GET")
-	Router.Handle("/api/view/{id}", wrapHandler(gzipAPIViewHandler)).Methods("GET")
+	Router.Handle("/api/view/{id:[0-9]*}", wrapHandler(gzipAPIViewHandler)).Methods("GET")
 	Router.Handle("/api/upload", gzipAPIUploadHandler).Methods("POST")
 	Router.Handle("/api/update", gzipAPIUpdateHandler).Methods("PUT")
 	Router.Handle("/faq", gzipFaqHandler).Name("faq")

@@ -8,11 +8,16 @@ import (
 type Memcache struct {
 }
 
-func (c *Memcache) Get(key common.SearchParam, r func() ([]*model.Torrent, int, error)) (torrents []*model.Torrent, num int, err error) {
+func (c *Memcache) GetTorrents(key *common.TorrentParam, get model.TorrentObtainer) (torrents []model.Torrent, err error) {
+	torrents, err = get()
 	return
 }
 
 func (c *Memcache) ClearAll() {
+
+}
+
+func (c *Memcache) ClearTorrents() {
 
 }
 

@@ -8,11 +8,15 @@ import (
 type NopCache struct {
 }
 
-func (c *NopCache) Get(key common.SearchParam, fn func() ([]*model.Torrent, int, error)) ([]*model.Torrent, int, error) {
-	return fn()
+func (c *NopCache) GetTorrents(key *common.TorrentParam, get model.TorrentObtainer) ([]model.Torrent, error) {
+	return get()
 }
 
 func (c *NopCache) ClearAll() {
+
+}
+
+func (c *NopCache) ClearTorrents() {
 
 }
 
