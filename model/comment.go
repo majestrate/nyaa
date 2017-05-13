@@ -5,16 +5,16 @@ import (
 )
 
 type Comment struct {
-	ID        uint      `gorm:"column:comment_id;primary_key"`
-	TorrentID uint      `gorm:"column:torrent_id"`
-	UserID    uint      `gorm:"column:user_id"`
-	Content   string    `gorm:"column:content"`
-	CreatedAt time.Time `gorm:"column:created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at"`
+	ID        uint
+	TorrentID uint
+	UserID    uint
+	Content   string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 	DeletedAt *time.Time
 
-	Torrent *Torrent `gorm:"ForeignKey:torrent_id"`
-	User    *User    `gorm:"ForeignKey:user_id"`
+	Torrent *Torrent
+	User    *User
 }
 
 // Returns the total size of memory recursively allocated for this struct
@@ -23,22 +23,15 @@ func (c Comment) Size() int {
 }
 
 type OldComment struct {
-	TorrentID uint      `gorm:"column:torrent_id"`
-	Username  string    `gorm:"column:username"`
-	Content   string    `gorm:"column:content"`
-	Date      time.Time `gorm:"column:date"`
+	TorrentID uint
+	Username  string
+	Content   string
+	Date      time.Time
 
-	Torrent *Torrent `gorm:"ForeignKey:torrent_id"`
+	Torrent *Torrent
 }
 
 // Returns the total size of memory recursively allocated for this struct
 func (c OldComment) Size() int {
 	return (1 + 2*2 + len(c.Username) + len(c.Content) + 3 + 1) * 8
-}
-
-func (c OldComment) TableName() string {
-	// cba to rename this in the db
-	// TODO: Update database schema to fix this hack
-	//       I find this odd considering how often the schema changes already
-	return "comments_old"
 }

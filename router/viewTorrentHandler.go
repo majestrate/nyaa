@@ -9,7 +9,6 @@ import (
 	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
 	"github.com/ewhal/nyaa/service/captcha"
-	"github.com/ewhal/nyaa/service/torrent"
 	"github.com/ewhal/nyaa/util"
 	"github.com/ewhal/nyaa/util/languages"
 	"github.com/ewhal/nyaa/util/log"
@@ -57,7 +56,7 @@ func PostCommentHandler(w http.ResponseWriter, r *http.Request) {
 	userID := currentUser.ID
 	comment := model.Comment{TorrentID: uint(idNum), UserID: userID, Content: content, CreatedAt: time.Now()}
 
-	err = db.ORM.Create(&comment).Error
+	err = db.Impl.InsertComment(&comment)
 	if err != nil {
 		util.SendError(w, err, 500)
 		return
@@ -92,7 +91,7 @@ func ReportTorrentHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:   time.Now(),
 	}
 
-	err = db.ORM.Create(&report).Error
+	err = db.Impl.InsertReport(&report)
 	if err != nil {
 		util.SendError(w, err, 500)
 		return

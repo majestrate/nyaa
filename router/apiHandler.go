@@ -11,9 +11,7 @@ import (
 	"github.com/ewhal/nyaa/config"
 	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
-	"github.com/ewhal/nyaa/service"
 	"github.com/ewhal/nyaa/service/api"
-	"github.com/ewhal/nyaa/service/torrent"
 	"github.com/ewhal/nyaa/util"
 	"github.com/ewhal/nyaa/util/log"
 	"github.com/gorilla/mux"
@@ -22,7 +20,7 @@ import (
 func ApiHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	page := vars["page"]
-	whereParams := serviceBase.WhereParams{}
+	whereParams := db.WhereParams{}
 	req := apiService.TorrentsRequest{}
 
 	contentType := r.Header.Get("Content-Type")
@@ -60,7 +58,7 @@ func ApiHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	torrents, nbTorrents, err := torrentService.GetTorrents(whereParams, req.MaxPerPage, req.MaxPerPage*(req.Page-1))
+	torrents, nbTorrents, err := db.Impl.GetTorrentsWhere(&whereParams, req.MaxPerPage, req.MaxPerPage*(req.Page-1))
 	if err != nil {
 		util.SendError(w, err, 400)
 		return

@@ -9,7 +9,7 @@ import (
 
 func Handle() {
 	// TODO: Something about SIGHUP for Windows
-
+	log.Info("setting up WIN32 signal handlers")
 	chnl := make(chan os.Signal)
 	signal.Notify(chnl, os.Interrupt)
 	for {

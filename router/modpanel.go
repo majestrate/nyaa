@@ -8,10 +8,8 @@ import (
 
 	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
-	"github.com/ewhal/nyaa/service"
 	"github.com/ewhal/nyaa/service/comment"
 	"github.com/ewhal/nyaa/service/report"
-	"github.com/ewhal/nyaa/service/torrent"
 	"github.com/ewhal/nyaa/service/user"
 	form "github.com/ewhal/nyaa/service/user/form"
 	"github.com/ewhal/nyaa/service/user/permission"
@@ -26,10 +24,10 @@ func IndexModPanel(w http.ResponseWriter, r *http.Request) {
 	if userPermission.HasAdmin(currentUser) {
 		offset := 10
 
-		torrents, _, _ := torrentService.GetAllTorrents(offset, 0)
+		torrents, _ := db.Impl.GetAllTorrents(offset, 0)
 		users, _ := userService.RetrieveUsersForAdmin(offset, 0)
 		comments, _ := commentService.GetAllComments(offset, 0, "", "")
-		torrentReports, _, _ := reportService.GetAllTorrentReports(offset, 0)
+		torrentReports, _ := reportService.GetAllTorrentReports(offset, 0)
 
 		languages.SetTranslationFromRequest(panelIndex, r, "en-us")
 		htv := PanelIndexVbs{torrents, torrentReports, users, comments, NewSearchForm(), currentUser, r.URL}
@@ -197,8 +195,12 @@ func TorrentPostEditModPanel(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	err := form.NewErrors()
 	infos := form.NewInfos()
-	torrent, _ := torrentService.GetTorrentById(id)
-	if torrent.ID > 0 {
+	torrent, err := torrentService.GetTorrentById(id)
+	if err == nil {
+		if torrent == nil {
+			http.NotFound(w, r)
+			return
+		}
 		errUp := uploadForm.ExtractEditInfo(r)
 		if errUp != nil {
 			err["errors"] = append(err["errors"], "Failed to update torrent!")
@@ -210,14 +212,15 @@ func TorrentPostEditModPanel(w http.ResponseWriter, r *http.Request) {
 			torrent.SubCategory = uploadForm.SubCategoryID
 			torrent.Status = uploadForm.Status
 			torrent.Description = uploadForm.Description
-			torrent.Uploader = nil // GORM will create a new user otherwise (wtf?!)
-			db.ORM.Save(&torrent)
+			db.Impl.UpdateTorrent(&torrent)
 			infos["infos"] = append(infos["infos"], "Torrent details updated.")
 		}
+		languages.SetTranslationFromRequest(panelTorrentEd, r, "en-us")
+		htv := PanelTorrentEdVbs{uploadForm, NewSearchForm(), currentUser, err, infos, r.URL}
+		_ = panelTorrentEd.ExecuteTemplate(w, "admin_index.html", htv)
+	} else {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-	languages.SetTranslationFromRequest(panelTorrentEd, r, "en-us")
-	htv := PanelTorrentEdVbs{uploadForm, NewSearchForm(), currentUser, err, infos, r.URL}
-	_ = panelTorrentEd.ExecuteTemplate(w, "admin_index.html", htv)
 }
 
 func CommentDeleteModPanel(w http.ResponseWriter, r *http.Request) {

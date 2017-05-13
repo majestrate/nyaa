@@ -6,8 +6,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/ewhal/nyaa/common"
 	"github.com/ewhal/nyaa/db"
-	"github.com/ewhal/nyaa/model"
 	"github.com/ewhal/nyaa/util/log"
 )
 
@@ -29,7 +29,7 @@ type Transaction struct {
 	ConnectionID  uint64
 	bucket        *Bucket
 	state         uint8
-	swarms        []model.Torrent
+	result        []common.ScrapeResult
 	lastData      time.Time
 }
 
@@ -41,35 +41,21 @@ func (t *Transaction) Done() {
 func (t *Transaction) handleScrapeReply(data []byte) {
 	data = data[8:]
 	now := time.Now()
-	for idx := range t.swarms {
-		t.swarms[idx].Seeders = binary.BigEndian.Uint32(data)
+	for idx := range t.result {
+		t.result[idx].Seeders = binary.BigEndian.Uint32(data)
 		data = data[4:]
-		t.swarms[idx].Completed = binary.BigEndian.Uint32(data)
+		t.result[idx].Completed = binary.BigEndian.Uint32(data)
 		data = data[4:]
-		t.swarms[idx].Leechers = binary.BigEndian.Uint32(data)
+		t.result[idx].Leechers = binary.BigEndian.Uint32(data)
 		data = data[4:]
-		t.swarms[idx].LastScrape = now
+		t.result[idx].Date = now
 		idx++
 	}
 }
 
-const pgQuery = "UPDATE torrents SET seeders = $1 , leechers = $2 , completed = $3 , last_scrape = $4 WHERE torrent_id = $5"
-const sqliteQuery = "UPDATE torrents SET seeders = ? , leechers = ? , completed = ? , last_scrape = ? WHERE torrent_id = ?"
-
 // Sync syncs models with database
 func (t *Transaction) Sync() (err error) {
-	q := pgQuery
-	if db.IsSqlite {
-		q = sqliteQuery
-	}
-	tx, e := db.ORM.DB().Begin()
-	err = e
-	if err == nil {
-		for idx := range t.swarms {
-			_, err = tx.Exec(q, t.swarms[idx].Seeders, t.swarms[idx].Leechers, t.swarms[idx].Completed, t.swarms[idx].LastScrape, t.swarms[idx].ID)
-		}
-		tx.Commit()
-	}
+	err = db.Impl.RecordScrapes(t.result)
 	return
 }
 
@@ -79,7 +65,7 @@ func (t *Transaction) SendEvent(to net.Addr) (ev *SendEvent) {
 		To: to,
 	}
 	if t.state == stateRecvID {
-		l := len(t.swarms) * 20
+		l := len(t.result) * 20
 		l += 16
 
 		ev.Data = make([]byte, l)
@@ -87,8 +73,8 @@ func (t *Transaction) SendEvent(to net.Addr) (ev *SendEvent) {
 		binary.BigEndian.PutUint64(ev.Data[:], t.ConnectionID)
 		binary.BigEndian.PutUint32(ev.Data[8:], 2)
 		binary.BigEndian.PutUint32(ev.Data[12:], t.TransactionID)
-		for idx := range t.swarms {
-			ih, err := hex.DecodeString(t.swarms[idx].Hash)
+		for idx := range t.result {
+			ih, err := hex.DecodeString(t.result[idx].Hash)
 			if err == nil && len(ih) == 20 {
 				copy(ev.Data[16+(idx*20):], ih)
 			}
@@ -123,7 +109,7 @@ func (t *Transaction) GotData(data []byte) (done bool) {
 			}
 			break
 		case actionScrape:
-			if len(data) == (12*len(t.swarms))+8 && t.state == stateTransact {
+			if len(data) == (12*len(t.result))+8 && t.state == stateTransact {
 				t.handleScrapeReply(data)
 			}
 			done = true

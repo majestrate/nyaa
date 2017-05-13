@@ -8,7 +8,7 @@ import (
 type NopCache struct {
 }
 
-func (c *NopCache) Get(key common.SearchParam, fn func() ([]model.Torrent, int, error)) ([]model.Torrent, int, error) {
+func (c *NopCache) Get(key common.SearchParam, fn func() ([]*model.Torrent, int, error)) ([]*model.Torrent, int, error) {
 	return fn()
 }
 

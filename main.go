@@ -118,29 +118,41 @@ func main() {
 		if err != nil {
 			log.CheckError(err)
 		}
-		db.ORM, err = db.GormInit(conf)
+		log.Info("configuring db")
+		err = db.Configure(conf)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
+		log.Info("doing db migrations")
+		err = db.Migrate()
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+		log.Info("setting up I18N")
 		initI18N()
+		log.Info("configuring cache")
 		err = cache.Configure(&conf.Cache)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
+		log.Info("configuring search")
 		err = search.Configure(&conf.Search)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
 		go signals.Handle()
 		if len(config.TorrentFileStorage) > 0 {
+			log.Infof("setting up torrent storage at %s", config.TorrentFileStorage)
 			err := os.MkdirAll(config.TorrentFileStorage, 0700)
 			if err != nil {
 				log.Fatal(err.Error())
 			}
 		}
 		if *mode == "scraper" {
+			log.Info("starting scraper")
 			RunScraper(conf)
 		} else if *mode == "webapp" {
+			log.Info("starting webapp")
 			RunServer(conf)
 		} else {
 			log.Fatalf("invalid runtime mode: %s", *mode)

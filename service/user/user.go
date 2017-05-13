@@ -3,6 +3,7 @@ package userService
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,38 +21,31 @@ import (
 )
 
 // SuggestUsername suggest user's name if user's name already occupied.
-func SuggestUsername(username string) string {
-	var count int
-	var usernameCandidate string
-	db.ORM.Model(model.User{}).Where(&model.User{Username: username}).Count(&count)
-	log.Debugf("count Before : %d", count)
-	if count == 0 {
-		return username
-	}
-	var postfix int
-	for {
-		usernameCandidate = username + strconv.Itoa(postfix)
-		log.Debugf("usernameCandidate: %s\n", usernameCandidate)
-		db.ORM.Model(model.User{}).Where(&model.User{Username: usernameCandidate}).Count(&count)
-		log.Debugf("count after : %d\n", count)
-		postfix = postfix + 1
-		if count == 0 {
+func SuggestUsername(username string) (name string) {
+	// TODO: make this less shit
+	tries := 100
+	for tries > 0 {
+		num := rand.Intn(9005)
+		name = fmt.Sprintf("%s_%d", username, num)
+		_, has, err := db.Impl.GetUserByName(name)
+		if has {
+			return
+		} else if err != nil {
 			break
 		}
+		tries--
+
 	}
-	return usernameCandidate
+	name = "gayballs" // lolz
+	return
 }
 
-func CheckEmail(email string) bool {
-	if len(email) == 0 {
-		return false
+func CheckEmail(email string) (has bool) {
+	if len(email) > 0 {
+		users, _ := db.Impl.GetUsersByEmail(email)
+		has = len(users) > 0
 	}
-	var count int
-	db.ORM.Model(model.User{}).Where("email = ?", email).Count(&count)
-	if count != 0 {
-		return true // error: duplicate
-	}
-	return false
+	return
 }
 
 // CreateUserFromForm creates a user from a registration form.
@@ -78,12 +72,9 @@ func CreateUserFromForm(registrationForm formStruct.RegistrationForm) (model.Use
 	user.Token = token
 	user.TokenExpiration = timeHelper.FewDaysLater(config.AuthTokenExpirationDay)
 	log.Debugf("user %+v\n", user)
-	if db.ORM.Create(&user).Error != nil {
-		return user, errors.New("user not created")
-	}
-
 	user.CreatedAt = time.Now()
-	return user, nil
+	err = db.Impl.InsertUser(&user)
+	return user, err
 }
 
 // CreateUser creates a user.
@@ -110,7 +101,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) (int, error) {
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-	if (registrationForm.Email != "") {
+	if registrationForm.Email != "" {
 		SendVerificationToUser(user, registrationForm.Email)
 	}
 	status, err = RegisterHandler(w, r)
@@ -118,12 +109,14 @@ func CreateUser(w http.ResponseWriter, r *http.Request) (int, error) {
 }
 
 // RetrieveUser retrieves a user.
-func RetrieveUser(r *http.Request, id string) (*model.PublicUser, bool, uint, int, error) {
-	var user model.User
-	var currentUserID uint
+func RetrieveUser(r *http.Request, id uint32) (*model.PublicUser, bool, uint32, int, error) {
+	var currentUserID uint32
 	var isAuthor bool
-
-	if db.ORM.First(&user, id).RecordNotFound() {
+	user, has, err := db.Impl.GetUserByID(id)
+	if err != nil {
+		return nil, false, 0, http.StatusInternalServerError, err
+	}
+	if !has {
 		return nil, isAuthor, currentUserID, http.StatusNotFound, errors.New("user not found")
 	}
 	currentUser, err := CurrentUser(r)
@@ -163,11 +156,11 @@ func UpdateUserCore(user *model.User) (int, error) {
 	}
 	user.Token = token
 	user.TokenExpiration = timeHelper.FewDaysLater(config.AuthTokenExpirationDay)
-	if db.ORM.Save(user).Error != nil {
+	user.UpdatedAt = time.Now()
+	err = db.Impl.UpdateUser(user)
+	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-
-	user.UpdatedAt = time.Now()
 	return http.StatusOK, nil
 }
 
@@ -196,7 +189,7 @@ func UpdateUser(w http.ResponseWriter, form *formStruct.UserForm, currentUser *m
 		form.Status = user.Status
 		form.Username = user.Username
 	}
-	if (form.Email != user.Email) {
+	if form.Email != user.Email {
 		SendVerificationToUser(user, form.Email)
 		form.Email = user.Email
 	}
@@ -213,18 +206,17 @@ func UpdateUser(w http.ResponseWriter, form *formStruct.UserForm, currentUser *m
 }
 
 // DeleteUser deletes a user.
-func DeleteUser(w http.ResponseWriter, currentUser *model.User, id string) (int, error) {
-	var user model.User
-	if db.ORM.First(&user, id).RecordNotFound() {
-		return http.StatusNotFound, errors.New("user not found")
-	}
-	if (user.ID == 0) {
+func DeleteUser(w http.ResponseWriter, currentUser *model.User, id uint32) (int, error) {
+
+	if currentUser.ID == 0 {
 		return http.StatusInternalServerError, errors.New("You can't delete that!")
 	}
-	if db.ORM.Delete(&user).Error != nil {
-		return http.StatusInternalServerError, errors.New("user not deleted")
+	err := db.Impl.DeleteUserByID(id)
+	if err != nil {
+		return http.StatusInternalServerError, err
 	}
-	if userPermission.CurrentUserIdentical(currentUser, user.ID) {
+
+	if userPermission.CurrentUserIdentical(currentUser, id) {
 		return ClearCookie(w)
 	}
 
@@ -240,33 +232,26 @@ func RetrieveCurrentUser(r *http.Request) (model.User, int, error) {
 	return user, http.StatusOK, nil
 }
 
-// RetrieveUserByEmail retrieves a user by an email
-func RetrieveUserByEmail(email string) (*model.PublicUser, string, int, error) {
-	var user model.User
-	if db.ORM.Unscoped().Where("email = ?", email).First(&user).RecordNotFound() {
-		return &model.PublicUser{User: &user}, email, http.StatusNotFound, errors.New("user not found")
-	}
-	return &model.PublicUser{User: &user}, email, http.StatusOK, nil
-}
-
 // RetrieveUsersByEmail retrieves users by an email
 func RetrieveUsersByEmail(email string) []*model.PublicUser {
-	var users []*model.User
+
 	var userArr []*model.PublicUser
-	db.ORM.Where("email = ?", email).Find(&users)
+	users, err := db.Impl.GetUsersByEmail(email)
 	for _, user := range users {
-		userArr = append(userArr, &model.PublicUser{User: user})
+		userArr = append(userArr, &model.PublicUser{User: &user})
 	}
 	return userArr
 }
 
 // RetrieveUserByUsername retrieves a user by username.
 func RetrieveUserByUsername(username string) (*model.PublicUser, string, int, error) {
-	var user model.User
-	if db.ORM.Where("username = ?", username).First(&user).RecordNotFound() {
-		return &model.PublicUser{User: &user}, username, http.StatusNotFound, errors.New("user not found")
+	user, has, err := db.Impl.GetUserByName(username)
+	if has {
+		return &model.PublicUser{User: &user}, username, http.StatusOK, nil
+	} else if err != nil {
+		return nil, username, http.StatusInternalServerError, err
 	}
-	return &model.PublicUser{User: &user}, username, http.StatusOK, nil
+	return nil, username, http.StatusNotFound, errors.New("no such user")
 }
 
 // RetrieveUserForAdmin retrieves a user for an administrator.

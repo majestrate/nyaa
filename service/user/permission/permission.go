@@ -12,36 +12,33 @@ func HasAdmin(user *model.User) bool {
 }
 
 // CurrentOrAdmin check that user has admin permission or user is the current user.
-func CurrentOrAdmin(user *model.User, userID uint) bool {
+func CurrentOrAdmin(user *model.User, userID uint32) bool {
 	log.Debugf("user.ID == userID %d %d %s", user.ID, userID, user.ID == userID)
 	return (HasAdmin(user) || user.ID == userID)
 }
 
 // CurrentUserIdentical check that userID is same as current user's ID.
 // TODO: Inline this
-func CurrentUserIdentical(user *model.User, userID uint) bool {
+func CurrentUserIdentical(user *model.User, userID uint32) bool {
 	return user.ID == userID
 }
 
-func GetRole(user *model.User) string {
+func GetRole(user *model.User) (str string) {
 	switch user.Status {
 	case -1:
-		return "Banned"
-	case 0:
-		return "Member"
+		str = "Banned"
 	case 1:
-		return "Trusted Member"
+		str = "Trusted Member"
 	case 2:
-		return "Moderator"
+		str = "Moderator"
+	case 0:
+	default:
+		str = "Member"
 	}
-	return "Member"
+	return
 }
 
-func IsFollower(user *model.User, currentUser *model.User) bool {
-	var likingUserCount int
-	db.ORM.Model(&model.UserFollows{}).Where("user_id = ? and following = ?", user.ID, currentUser.ID).Count(&likingUserCount)
-	if likingUserCount != 0 {
-		return true
-	}
-	return false
+func IsFollower(user *model.User, currentUser *model.User) (follows bool, err error) {
+	follows, err = db.Impl.UserFollows(currentUser.ID, user.ID)
+	return
 }

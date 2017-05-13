@@ -5,29 +5,32 @@ import (
 )
 
 type User struct {
-	ID              uint      `gorm:"column:user_id;primary_key"`
-	Username        string    `gorm:"column:username"`
-	Password        string    `gorm:"column:password"`
-	Email           string    `gorm:"column:email"`
-	Status          int       `gorm:"column:status"`
-	CreatedAt       time.Time `gorm:"column:created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at"`
-	Token           string    `gorm:"column:api_token"`
-	TokenExpiration time.Time `gorm:"column:api_token_expiry"`
-	Language        string    `gorm:"column:language"`
+	ID              uint32
+	Username        string
+	Password        string
+	Email           string
+	Status          int
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	Token           string
+	TokenExpiration time.Time
+	Language        string
 
 	// TODO: move this to PublicUser
-	LikingCount int    `json:"likingCount" gorm:"-"`
-	LikedCount  int    `json:"likedCount" gorm:"-"`
+	LikingCount int    `json:"likingCount"`
+	LikedCount  int    `json:"likedCount"`
 	Likings     []User // Don't work `gorm:"foreignkey:user_id;associationforeignkey:follower_id;many2many:user_follows"`
 	Liked       []User // Don't work `gorm:"foreignkey:follower_id;associationforeignkey:user_id;many2many:user_follows"`
 
-	MD5      string    `json:"md5" gorm:"column:md5"` // Hash of email address, used for Gravatar
-	Torrents []Torrent `gorm:"ForeignKey:UploaderID"`
+	MD5      string `json:"md5"` // Hash of email address, used for Gravatar
+	Torrents []Torrent
+
+	LastLoginAt time.Time
+	LastLoginIP string
 }
 
 type UserJSON struct {
-	ID          uint   `json:"user_id"`
+	ID          uint32 `json:"user_id"`
 	Username    string `json:"username"`
 	Status      int    `json:"status"`
 	CreatedAt   string `json:"created_at"`
@@ -56,22 +59,17 @@ type PublicUser struct {
 
 // different users following eachother
 type UserFollows struct {
-	UserID     uint `gorm:"column:user_id"`
-	FollowerID uint `gorm:"column:following"`
+	UserID     uint32
+	FollowerID uint32
 }
 
 type UserUploadsOld struct {
-	Username  string `gorm:"column:username"`
-	TorrentId uint   `gorm:"column:torrent_id"`
+	Username  string
+	TorrentId uint
 }
 
-func (c UserUploadsOld) TableName() string {
-	// TODO: rename this in db
-	return "user_uploads_old"
-}
-
-func (u *User) ToJSON() UserJSON {
-	json := UserJSON{
+func (u *User) ToJSON() *UserJSON {
+	json := &UserJSON{
 		ID:          u.ID,
 		Username:    u.Username,
 		Status:      u.Status,

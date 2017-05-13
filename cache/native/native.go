@@ -43,15 +43,15 @@ type store struct {
 	sync.Mutex  // Controls general access to the contents of the struct
 	lastFetched time.Time
 	key         common.SearchParam
-	data        []model.Torrent
+	data        []*model.Torrent
 	count, size int
 	n           *NativeCache
 }
 
 // Check the cache for and existing record. If miss, run fn to retrieve fresh
 // values.
-func (n *NativeCache) Get(key common.SearchParam, fn func() ([]model.Torrent, int, error)) (
-	data []model.Torrent, count int, err error,
+func (n *NativeCache) Get(key common.SearchParam, fn func() ([]*model.Torrent, int, error)) (
+	data []*model.Torrent, count int, err error,
 ) {
 	s := n.getStore(key)
 
@@ -125,7 +125,7 @@ func (s *store) isFresh() bool {
 
 // Stores the new values of s. Calculates and stores the new size. Passes the
 // delta to the central cache to fire eviction checks.
-func (s *store) update(data []model.Torrent, count int) {
+func (s *store) update(data []*model.Torrent, count int) {
 	newSize := 0
 	for _, d := range data {
 		newSize += d.Size()

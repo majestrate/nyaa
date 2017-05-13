@@ -7,8 +7,8 @@ import (
 
 	"github.com/ewhal/nyaa/cache"
 	"github.com/ewhal/nyaa/common"
+	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
-	"github.com/ewhal/nyaa/service/torrent"
 	"github.com/ewhal/nyaa/util"
 	"github.com/ewhal/nyaa/util/languages"
 	"github.com/ewhal/nyaa/util/log"
@@ -44,8 +44,8 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 		Page: pagenum,
 	}
 
-	torrents, nbTorrents, err := cache.Impl.Get(search, func() ([]model.Torrent, int, error) {
-		torrents, nbTorrents, err := torrentService.GetAllTorrents(maxPerPage, maxPerPage*(pagenum-1))
+	torrents, nbTorrents, err := cache.Impl.Get(search, func() ([]*model.Torrent, int, error) {
+		torrents, nbTorrents, err := db.Impl.GetAllTorrents(maxPerPage, maxPerPage*(pagenum-1))
 		if !log.CheckError(err) {
 			util.SendError(w, err, 400)
 		}

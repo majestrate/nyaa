@@ -20,6 +20,7 @@ func handleReload() {
 // Handle signals
 // returns when done
 func Handle() {
+	log.Info("setting up UNIX signal handlers")
 	chnl := make(chan os.Signal)
 	signal.Notify(chnl, syscall.SIGHUP, os.Interrupt)
 	for {

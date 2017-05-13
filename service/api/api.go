@@ -3,12 +3,11 @@ package apiService
 import (
 	"net/http"
 	"net/url"
-	"reflect"
 	"regexp"
 	"strings"
 
+	"github.com/ewhal/nyaa/db"
 	"github.com/ewhal/nyaa/model"
-	"github.com/ewhal/nyaa/service"
 )
 
 type torrentsQuery struct {
@@ -40,23 +39,11 @@ type UpdateRequest struct {
 	Update TorrentRequest `json:"update"`
 }
 
-func (r *TorrentsRequest) ToParams() serviceBase.WhereParams {
-	res := serviceBase.WhereParams{}
-	conditions := ""
-	v := reflect.ValueOf(r.Query)
+func (r *TorrentsRequest) ToParams() (res db.WhereParams) {
 
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Field(i)
-		if field.Interface() != reflect.Zero(field.Type()).Interface() {
-			if i != 0 {
-				conditions += " AND "
-			}
-			conditions += v.Type().Field(i).Tag.Get("json") + " = ?"
-			res.Params = append(res.Params, field.Interface())
-		}
-	}
-	res.Conditions = conditions
-	return res
+	// TODO: write this
+
+	return
 }
 
 func validateName(r *TorrentRequest) (error, int) {

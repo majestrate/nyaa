@@ -1,9 +1,9 @@
 package scraperService
 
 import (
+	"github.com/ewhal/nyaa/common"
 	"github.com/ewhal/nyaa/config"
 	"github.com/ewhal/nyaa/db"
-	"github.com/ewhal/nyaa/model"
 	"github.com/ewhal/nyaa/util/log"
 	"net"
 	"net/url"
@@ -181,13 +181,13 @@ func (sc *Scraper) Scrape(packets uint) {
 	now := time.Now().Add(0 - sc.interval)
 	// only scrape torretns uploaded within 90 days
 	oldest := now.Add(0 - (time.Hour * 24 * 90))
-	rows, err := db.ORM.Raw("SELECT torrent_id, torrent_hash FROM torrents WHERE ( last_scrape IS NULL OR  last_scrape < ? ) AND date > ? ORDER BY torrent_id DESC LIMIT ?", now, oldest, packets*ScrapesPerPacket).Rows()
+	rows, err := db.Impl.Query("SELECT torrent_id, torrent_hash FROM torrents WHERE ( last_scrape IS NULL OR  last_scrape < $1 ) AND date > $2 ORDER BY torrent_id DESC LIMIT $3", now, oldest, packets*ScrapesPerPacket)
 	if err == nil {
 		counter := 0
-		var scrape [ScrapesPerPacket]model.Torrent
+		var scrape [ScrapesPerPacket]common.ScrapeResult
 		for rows.Next() {
 			idx := counter % ScrapesPerPacket
-			rows.Scan(&scrape[idx].ID, &scrape[idx].Hash)
+			rows.Scan(&scrape[idx].TorrentID, &scrape[idx].Hash)
 			counter++
 			if counter%ScrapesPerPacket == 0 {
 				for _, b := range sc.trackers {

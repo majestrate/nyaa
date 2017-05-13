@@ -20,30 +20,30 @@ type Feed struct {
 }
 
 type Torrent struct {
-	ID          uint      `gorm:"column:torrent_id;primary_key"`
-	Name        string    `gorm:"column:torrent_name"`
-	Hash        string    `gorm:"column:torrent_hash"`
-	Category    int       `gorm:"column:category"`
-	SubCategory int       `gorm:"column:sub_category"`
-	Status      int       `gorm:"column:status"`
-	Date        time.Time `gorm:"column:date"`
-	UploaderID  uint      `gorm:"column:uploader"`
-	Downloads   int       `gorm:"column:downloads"`
-	Stardom     int       `gorm:"column:stardom"`
-	Filesize    int64     `gorm:"column:filesize"`
-	Description string    `gorm:"column:description"`
-	WebsiteLink string    `gorm:"column:website_link"`
+	ID          uint
+	Name        string
+	Hash        string
+	Category    int
+	SubCategory int
+	Status      int
+	Date        time.Time
+	UploaderID  uint
+	Downloads   int
+	Stardom     int
+	Filesize    int64
+	Description string
+	WebsiteLink string
 	DeletedAt   *time.Time
 
-	Uploader    *User        `gorm:"ForeignKey:uploader"`
-	OldUploader string       `gorm:"-"` // ???????
-	OldComments []OldComment `gorm:"ForeignKey:torrent_id"`
-	Comments    []Comment    `gorm:"ForeignKey:torrent_id"`
+	Uploader    *User
+	OldUploader string
+	OldComments []OldComment
+	Comments    []Comment
 
-	Seeders    uint32    `gorm:"column:seeders"`
-	Leechers   uint32    `gorm:"column:leechers"`
-	Completed  uint32    `gorm:"column:completed"`
-	LastScrape time.Time `gorm:"column:last_scrape"`
+	Seeders    uint32
+	Leechers   uint32
+	Completed  uint32
+	LastScrape time.Time
 }
 
 // Returns the total size of memory recursively allocated for this struct
@@ -113,7 +113,7 @@ type TorrentJSON struct {
 }
 
 // ToJSON converts a model.Torrent to its equivalent JSON structure
-func (t *Torrent) ToJSON() TorrentJSON {
+func (t *Torrent) ToJSON() *TorrentJSON {
 	magnet := util.InfoHashToMagnet(strings.TrimSpace(t.Hash), t.Name, config.Trackers...)
 	commentsJSON := make([]CommentJSON, 0, len(t.OldComments)+len(t.Comments))
 	for _, c := range t.OldComments {
@@ -133,7 +133,7 @@ func (t *Torrent) ToJSON() TorrentJSON {
 		// TODO: Fix as part of configuration changes (fix what?)
 		torrentlink = fmt.Sprintf(config.TorrentStorageLink, t.Hash)
 	}
-	res := TorrentJSON{
+	res := &TorrentJSON{
 		ID:           strconv.FormatUint(uint64(t.ID), 10),
 		Name:         t.Name,
 		Status:       t.Status,
@@ -163,8 +163,8 @@ func (t *Torrent) ToJSON() TorrentJSON {
 /* Complete the functions when necessary... */
 
 // Map Torrents to TorrentsToJSON without reallocations
-func TorrentsToJSON(t []Torrent) []TorrentJSON { // TODO: Convert to singular version
-	json := make([]TorrentJSON, len(t))
+func TorrentsToJSON(t []*Torrent) []*TorrentJSON { // TODO: Convert to singular version
+	json := make([]*TorrentJSON, len(t))
 	for i := range t {
 		json[i] = t[i].ToJSON()
 	}

@@ -8,7 +8,7 @@ import (
 type Memcache struct {
 }
 
-func (c *Memcache) Get(key common.SearchParam, r func() ([]model.Torrent, int, error)) (torrents []model.Torrent, num int, err error) {
+func (c *Memcache) Get(key common.SearchParam, r func() ([]*model.Torrent, int, error)) (torrents []*model.Torrent, num int, err error) {
 	return
 }
 

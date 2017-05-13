@@ -65,34 +65,46 @@ func ClearCookie(w http.ResponseWriter) (int, error) {
 }
 
 // SetCookieHandler sets a cookie with email and password.
-func SetCookieHandler(w http.ResponseWriter, email string, pass string) (int, error) {
+func SetCookieHandler(w http.ResponseWriter, email string, pass string) (status int, err error) {
 	if email != "" && pass != "" {
 		var user model.User
+		var has bool
 		isValidEmail, _ := formStruct.EmailValidation(email, formStruct.NewErrors())
 		if isValidEmail {
-			log.Debug("User entered valid email.")
-			if db.ORM.Where("email = ?", email).First(&user).RecordNotFound() {
-				return http.StatusNotFound, errors.New("User not found")
+			var users []model.User
+			users, err = db.Impl.GetUsersByEmail(email)
+			if err == nil && len(users) == 0 {
+				status = http.StatusNotFound
+				err = errors.New("User not found")
+				return
+			} else if err != nil {
+				status = http.StatusInternalServerError
+				return
 			}
 		} else {
-			log.Debug("User entered username.")
-			if db.ORM.Where("username = ?", email).First(&user).RecordNotFound() {
-				return http.StatusNotFound, errors.New("User not found")
+			user, has, err = db.Impl.GetUserByName(email)
+			if err == nil && !has {
+				status = http.StatusNotFound
+				err = errors.New("User not found")
+				return
+			} else if err != nil {
+				status = http.StatusInternalServerError
+				return
 			}
 		}
-		err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pass))
+		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(pass))
 		if err != nil {
 			return http.StatusUnauthorized, errors.New("Password incorrect")
 		}
 		if user.Status == -1 {
 			return http.StatusUnauthorized, errors.New("Account banned")
 		}
-		status, err := SetCookie(w, user.Token)
+		status, err = SetCookie(w, user.Token)
 		if err != nil {
-			return status, err
+			return
 		}
 		w.Header().Set("X-Auth-Token", user.Token)
-		return http.StatusOK, nil
+		status = http.StatusOK
 	}
 	return http.StatusNotFound, errors.New("user not found")
 }
@@ -126,9 +138,12 @@ func CurrentUser(r *http.Request) (model.User, error) {
 			return user, err
 		}
 	}
-	if db.ORM.Where("api_token = ?", token).First(&user).RecordNotFound() {
-		return user, errors.New("user not found")
+	var has bool
+	user, has, err = db.Impl.GetUserByApiToken(token)
+	if has {
+		return user, nil
+	} else if err == nil {
+		err = errors.New("no such user")
 	}
-	err = db.ORM.Model(&user).Error
 	return user, err
 }

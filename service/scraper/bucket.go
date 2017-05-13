@@ -5,7 +5,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/ewhal/nyaa/model"
+	"github.com/ewhal/nyaa/common"
 )
 
 const InitialConnectionID = 0x41727101980
@@ -16,7 +16,7 @@ type Bucket struct {
 	transactions map[uint32]*Transaction
 }
 
-func (b *Bucket) NewTransaction(swarms []model.Torrent) (t *Transaction) {
+func (b *Bucket) NewTransaction(r []common.ScrapeResult) (t *Transaction) {
 	id := rand.Uint32()
 	// get good id
 	b.access.Lock()
@@ -28,10 +28,10 @@ func (b *Bucket) NewTransaction(swarms []model.Torrent) (t *Transaction) {
 	t = &Transaction{
 		TransactionID: id,
 		bucket:        b,
-		swarms:        make([]model.Torrent, len(swarms)),
+		result:        make([]common.ScrapeResult, len(r)),
 		state:         stateSendID,
 	}
-	copy(t.swarms[:], swarms[:])
+	copy(t.result[:], r[:])
 	b.transactions[id] = t
 	b.access.Unlock()
 	return

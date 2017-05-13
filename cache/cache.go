@@ -13,7 +13,7 @@ import (
 
 // Cache defines interface for caching search results
 type Cache interface {
-	Get(key common.SearchParam, r func() ([]model.Torrent, int, error)) ([]model.Torrent, int, error)
+	Get(key common.SearchParam, r func() ([]*model.Torrent, int, error)) ([]*model.Torrent, int, error)
 	ClearAll()
 }
 
